@@ -1,0 +1,10 @@
+Package: bfsae
+Title: Shortcuts for fitting and diagnosing SAE models in nlme.
+Version: 0.1
+Authors@R: person("Bryce", "Frank", email = "bryce.frank@oregonstate.edu",
+                  role = c("aut", "cre"))
+Description: Shortcuts for fitting and diagnosing SAE models in nlme.
+Depends: R (>= 3.1.0)
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1

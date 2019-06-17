@@ -28,19 +28,36 @@ extended_rand <- function(form, data, weights, rand_form) {
   return(model)
 }
 
-fit_all_models <- function(responses, predictors, gamma, data, rand_str, nbest=5, nvmax=5, eta=c(0, 0.5, 1)) {
+extended_rand_sp <- function(form, data, weights, rand_form, sp_form) {
+  model <- lme(form, data = data, weights = weights, random = rand_form, method="ML", correlation=corExp(form = sp_form))
+  model$call$fixed <- form
+  return(model)
+}
+
+fit_all_models <- function(responses, predictors, gamma_str, data, rand_str, sp_str, nbest=5, nvmax=5, eta=c(0, 0.5, 1), verbose=FALSE,
+                           lps_plot_out_dir='.') {
+  # Remove gamma column and grouping column from predictors, since they are all passed as one item
   X <- data[, predictors]
+  X <- X[,  -which(names(X) %in% c(gamma_str, rand_str))]
+  predictors <- predictors[! predictors %in% c(gamma_str, rand_str)]
+  
+  # Convert strigns to needed formulae
+  rand_form <- formula(paste(" ~ 1|", rand_str, sep=""))
+  weights_form <- formula(paste("~", gamma_str, sep=""))
+  sp_form <- formula(paste("~", sp_str, "|STAND", sep = ""))
   
   # Define model containers
   all_mods <- list()
-  
-  # Convert random string to a formula
-  rand_form <- formula(rand_str)
 
   for (res in responses) {
+    if (verbose) {cat(paste("Fitting models for:", res, "\n"))}
+    
     # Construct the leaps object
     y <- data[, res]
     lps <- leaps(x=X, y=y, nbest=nbest, method="adjr2")
+    
+    # Write leaps plot
+    write_leaps_plot(lps, res, lps_plot_out_dir)
 
     # Get a list of model formulas for all models with <= nvmax predictors
     lps_sub <- lps$which[which(as.numeric(rownames(lps$which)) <= nvmax),]
@@ -49,12 +66,23 @@ fit_all_models <- function(responses, predictors, gamma, data, rand_str, nbest=5
     # Write the gls plots to file
     for (i in 1:length(eta)) {
       weight <- as.character(eta[[i]])
-      # TODO generalize the form
-      gls_list <- lapply(forms_list, extended_gls, data=data, weights = varPower(form=~p_95_mean, fixed=eta[[i]]))
-      random_list <- lapply(forms_list, extended_rand, data=data, weights = varPower(form=~p_95_mean, fixed=eta[[i]]), rand_form=rand_form)
+      
+      if (verbose) {cat(paste("---eta=", eta[[i]], "\n", sep=""))}
+      
+      if (verbose) {cat(paste("------Fitting fixed models.\n"))}
+      gls_list <- lapply(forms_list, extended_gls, data=data, weights = varPower(form=weights_form, fixed=eta[[i]]))
+      
+      if (verbose) {cat(paste("------Fitting ranef models.\n"))}
+      random_ind_list <-  lapply(forms_list, extended_rand, data=data, weights = varPower(form=weights_form, fixed=eta[[i]]),
+                                rand_form=rand_form)
+      
+      if (verbose) {cat(paste("------Fitting ranef+spatial models.\n"))}
+      random_sp_list <-   lapply(forms_list, extended_rand_sp, data=data, weights = varPower(form=weights_form, fixed=eta[[i]]),
+                                rand_form=rand_form, sp_form)
       
       all_mods[[res]][[weight]][['fixed']] <- gls_list
-      all_mods[[res]][[weight]][['random_ind']] <- random_list
+      all_mods[[res]][[weight]][['random_ind']] <- random_ind_list
+      all_mods[[res]][[weight]][['random_sp']] <- random_sp_list
     }
   }
   return(all_mods)

@@ -17,20 +17,25 @@ make_model_forms <- function(row_bool, res, predictors) {
 }
 
 extended_gls <- function(form, data, weights) {
-  mod <- gls(form, data = data, weights = weights, method="ML")
-  mod$call$model <- form
-  return(mod)
+  model <- gls(form, data = data, weights = weights, method="ML")
+  model$call$model <- form
+  return(model)
 }
 
-extended_rand <- function(form, data, weights) {
-  
+extended_rand <- function(form, data, weights, rand_form) {
+  model <- lme(form, data = data, weights = weights, random = rand_form, method="ML")
+  model$call$fixed <- form
+  return(model)
 }
 
-fit_all_models <- function(responses, predictors, gamma, data, nbest=5, nvmax=5) {
+fit_all_models <- function(responses, predictors, gamma, data, rand_str, nbest=5, nvmax=5, eta=c(0, 0.5, 1)) {
   X <- data[, predictors]
   
   # Define model containers
   all_mods <- list()
+  
+  # Convert random string to a formula
+  rand_form <- formula(rand_str)
 
   for (res in responses) {
     # Construct the leaps object
@@ -42,14 +47,14 @@ fit_all_models <- function(responses, predictors, gamma, data, nbest=5, nvmax=5)
     forms_list <- apply(lps_sub, 1, make_model_forms, res, predictors)
 
     # Write the gls plots to file
-    eta <- c(0, 0.5, 1)
     for (i in 1:length(eta)) {
       weight <- as.character(eta[[i]])
+      # TODO generalize the form
       gls_list <- lapply(forms_list, extended_gls, data=data, weights = varPower(form=~p_95_mean, fixed=eta[[i]]))
-      random_list <- lapply(forms_list, ex)
+      random_list <- lapply(forms_list, extended_rand, data=data, weights = varPower(form=~p_95_mean, fixed=eta[[i]]), rand_form=rand_form)
       
       all_mods[[res]][[weight]][['fixed']] <- gls_list
-      all_mods[[res]][[weight]][['random']] <- random_list
+      all_mods[[res]][[weight]][['random_ind']] <- random_list
     }
   }
   return(all_mods)

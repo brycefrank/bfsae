@@ -1,5 +1,6 @@
 library(leaps)
 library(nlme)
+library(gridExtra)
 
 write_leaps_plot <- function(leaps_obj, name, out_dir) {
   out_path <- paste(out_dir, name, ".pdf", sep="")
@@ -17,7 +18,7 @@ make_model_forms <- function(row_bool, res, predictors) {
 }
 
 extended_gls <- function(form, data, weights) {
-  mod <- gls(form, data = data, weights = weights, method="ML")
+  mod <- gls(form, data = data, method="ML")
   mod$call$model <- form
   return(mod)
 }
@@ -26,7 +27,7 @@ extended_rand <- function(form, data, weights) {
   
 }
 
-fit_all_models <- function(responses, predictors, gamma, data, nbest=5, nvmax=5) {
+fit_all_models <- function(responses, predictors, data, nbest=5, nvmax=5, lps_plot = FALSE) {
   X <- data[, predictors]
   
   # Define model containers
@@ -36,20 +37,25 @@ fit_all_models <- function(responses, predictors, gamma, data, nbest=5, nvmax=5)
     # Construct the leaps object
     y <- data[, res]
     lps <- leaps(x=X, y=y, nbest=nbest, method="adjr2")
+    
+    if (lps_plot != FALSE) {
+      print(lps_plot)
+      write_leaps_plot(lps, res, lps_plot)
+    }
 
     # Get a list of model formulas for all models with <= nvmax predictors
     lps_sub <- lps$which[which(as.numeric(rownames(lps$which)) <= nvmax),]
     forms_list <- apply(lps_sub, 1, make_model_forms, res, predictors)
 
     # Write the gls plots to file
-    eta <- c(0, 0.5, 1)
+    eta <- c(0)
     for (i in 1:length(eta)) {
       weight <- as.character(eta[[i]])
-      gls_list <- lapply(forms_list, extended_gls, data=data, weights = varPower(form=~p_95_mean, fixed=eta[[i]]))
-      random_list <- lapply(forms_list, ex)
+      gls_list <- lapply(forms_list, extended_gls, data=data)
+      #random_list <- lapply(forms_list, ex)
       
       all_mods[[res]][[weight]][['fixed']] <- gls_list
-      all_mods[[res]][[weight]][['random']] <- random_list
+      #all_mods[[res]][[weight]][['random']] <- random_list
     }
   }
   return(all_mods)
@@ -61,11 +67,12 @@ write_fixed_plots <- function(fixed_list, out_dir) {
     dir.create(res_dir)
     
     for (hskdcty in names(fixed_list[[res]])) {
-      models <- fixed_list[[res]][[hskdcty]]
+      models <- fixed_list[[res]][[hskdcty]]$fixed
       model_plots <- list()
       
       i <- 1
       for (model in models) {
+        print(model)
         model_plots[[i]] <- plot.lme(model, abline=c(0,99999), main = as.character(ceiling(i / 2)))
         model_plots[[i+1]] <- qqnorm(model, abline=c(0,1))
         i <- i + 2

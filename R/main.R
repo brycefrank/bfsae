@@ -1,6 +1,7 @@
 library(leaps)
 library(nlme)
 library(stringr)
+library(gridExtra)
 
 write_leaps_plot <- function(leaps_obj, name, out_dir) {
   out_path <- paste(out_dir, name, ".pdf", sep="")
@@ -39,15 +40,8 @@ extended_rand <- function(form, data, rand_form, eta) {
   return(model)
 }
 
-#extended_rand_sp <- function(form, data, weights, rand_form, sp_form) {
-#  model <- lme(form, data = data, weights = weights, random = rand_form, method="ML", correlation=corExp(form = sp_form))
-#  model$call$fixed <- form
-#  return(model)
-#}
-
 fit_all_models <- function(responses, predictors, data, rand_str, sp_str, nbest=5, nvmax=5, eta=c(0, 0.5, 1), verbose=FALSE,
                            lps_plot_out_dir='.') {
-  # Remove gamma column and grouping column from predictors, since they are all passed as one item
   X <- data[, predictors]
   X <- X[,  -which(names(X) %in% c(rand_str))]
   predictors <- predictors[-which(predictors == rand_str)]
@@ -94,7 +88,6 @@ fit_all_models <- function(responses, predictors, data, rand_str, sp_str, nbest=
       all_mods[[res]][[weight]][['fixed']] <- gls_list
       all_mods[[res]][[weight]][['random_ind']] <- random_ind_list
       #all_mods[[res]][[weight]][['random_sp']] <- random_sp_list
-    }
   }
   return(all_mods)
 }
@@ -105,11 +98,12 @@ write_fixed_plots <- function(fixed_list, out_dir) {
     dir.create(res_dir)
     
     for (hskdcty in names(fixed_list[[res]])) {
-      models <- fixed_list[[res]][[hskdcty]]
+      models <- fixed_list[[res]][[hskdcty]]$fixed
       model_plots <- list()
       
       i <- 1
       for (model in models) {
+        print(model)
         model_plots[[i]] <- plot.lme(model, abline=c(0,99999), main = as.character(ceiling(i / 2)))
         model_plots[[i+1]] <- qqnorm(model, abline=c(0,1))
         i <- i + 2
